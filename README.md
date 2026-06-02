@@ -145,7 +145,7 @@ Simple `key = value` file (`#` comments). Values must match a discovered session
 |-----|--------|---------|
 | `greeter_user` | install setup | greetd account (logs); not used at runtime for sync |
 | `default_session` | you (config or `--session` CLI) | default session on the picker when the greeter starts |
-| `session` | greeter UI | last session picked in the picker (or via keybind) |
+| `session` | greeter UI | last session used (picker or last successful login) |
 | `scheme` | greeter UI | last color scheme picked |
 
 **Initial session** on startup: `--session` / `--cmd` → `default_session` → `session` (last used) → first discovered session.
@@ -159,7 +159,9 @@ session="Hyprland"
 scheme="Synced"
 ```
 
-Opens with **niri** selected. If the user picks Hyprland, only `session` is updated; `default_session` stays **niri** for the next login. Without `default_session`, the greeter falls back to `session` (last used).
+Opens with **niri** selected. If the user picks Hyprland, only `session` is updated; `default_session` stays **niri** for the next login. Without `default_session` or `--session`, the greeter uses `session` (last used).
+
+If last-used never seems to stick, check that `default_session` is not set (it always wins over `session`), that `session=` in `greeter.conf` updates after login (`noctalia-greeter sessions` for exact **Name** spelling), and greeter logs for `failed to save greeter.conf`.
 
 List available session names (for `default_session` / `--session`):
 

@@ -1,6 +1,7 @@
 #include "greeter/greeter_sessions.h"
 
 #include <array>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -30,6 +31,19 @@ std::string sanitizeDesktopExec(const std::string &exec) {
     out += token;
   }
   return trim(out);
+}
+
+[[nodiscard]] bool equalsIgnoreCase(std::string_view a, std::string_view b) {
+  if (a.size() != b.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    if (std::tolower(static_cast<unsigned char>(a[i])) !=
+        std::tolower(static_cast<unsigned char>(b[i]))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 } // namespace
@@ -78,6 +92,20 @@ std::vector<SessionOption> discoverSessions() {
     sessions.push_back(SessionOption{.name = "Shell", .command = "/bin/sh"});
   }
   return sessions;
+}
+
+std::optional<std::size_t>
+findSessionIndex(const std::vector<SessionOption> &sessions,
+                 std::string_view name) {
+  if (name.empty()) {
+    return std::nullopt;
+  }
+  for (std::size_t i = 0; i < sessions.size(); ++i) {
+    if (equalsIgnoreCase(sessions[i].name, name)) {
+      return i;
+    }
+  }
+  return std::nullopt;
 }
 
 } // namespace greeter

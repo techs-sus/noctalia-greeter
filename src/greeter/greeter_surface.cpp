@@ -959,6 +959,8 @@ void GreeterSurface::onAuthSuccess() {
   updateStatus("Login successful, starting session...", false);
   kLog.info("authentication successful");
 
+  savePreferences();
+
   if (!m_greetdClient) {
     kLog.error("no greetd client to start session");
     return;
@@ -1224,11 +1226,9 @@ void GreeterSurface::loadPreferences() {
   const auto initialSession = greeter::resolveInitialSessionName(prefs);
 
   if (initialSession.has_value()) {
-    for (std::size_t i = 0; i < m_sessions.size(); ++i) {
-      if (m_sessions[i].name == *initialSession) {
-        m_selectedSession = i;
-        break;
-      }
+    if (const auto index =
+            greeter::findSessionIndex(m_sessions, *initialSession)) {
+      m_selectedSession = *index;
     }
   }
 
@@ -1418,9 +1418,9 @@ void GreeterSurface::applySelectorBoxStyle(Box *box, const InputArea *area) {
       .fillMode = FillMode::Solid,
       .radius = Style::scaledRadiusMd(),
       .softness = 1.0f,
-      .borderWidth = focused
-                         ? std::max(Style::borderWidth, Style::borderWidth * 2.0f)
-                         : Style::borderWidth,
+      .borderWidth =
+          focused ? std::max(Style::borderWidth, Style::borderWidth * 2.0f)
+                  : Style::borderWidth,
   });
 }
 
