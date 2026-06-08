@@ -32,7 +32,7 @@ Noctalia Greeter is the screen you see before your desktop session starts. It le
 
 It is built for **greetd**: greetd starts a small Wayland compositor ([Cage](https://github.com/cage-kiosk/cage)), and the greeter runs inside that session. It is a login UI only, not a desktop shell or compositor.
 
-Pair it with **[Noctalia Shell v5](https://github.com/noctalia-dev/noctalia-shell/tree/v5)** if you want wallpaper and palette synced from the shell settings (optional).
+Pair it with **[Noctalia v5](https://github.com/noctalia-dev/noctalia)** if you want wallpaper and palette synced from the shell settings (optional).
 
 ## Dependencies
 
