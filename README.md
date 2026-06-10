@@ -183,6 +183,14 @@ When `wlr-randr` cannot disable every other connector (some setups keep the prim
 
 On high-DPI panels (for example 4K without fractional scaling), the greeter scales its UI from the monitor's physical size when EDID reports it, otherwise from resolution. Scale is capped at 2×.
 
+To override auto scaling, set `scale` in `greeter.conf`:
+
+```ini
+scale=1.5
+```
+
+If `scale` is missing or invalid, the greeter falls back to auto scaling.
+
 List connector names from a running Wayland session:
 
 ```sh
@@ -219,6 +227,8 @@ Admin-only keys in `greeter.conf` (set by you, not the UI):
 
 - `default_session` - session selected when the greeter opens (overrides last-used unless you pass `--session` on the command line)
 - `greeter_user` - greetd account name (setup/logging)
+- `output` - Wayland connector name (see Multi-monitor)
+- `scale` - manual UI scale factor (e.g. `1.5`); invalid or missing → auto scale
 
 The greeter updates `session` and `scheme` when you change them in the UI.
 

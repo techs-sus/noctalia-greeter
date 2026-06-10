@@ -80,6 +80,7 @@ bool Greeter::initialize(WaylandClient &client) {
   m_client = &client;
 
   const greeter::GreeterPreferences prefs = greeter::loadGreeterPreferences();
+  m_manualUiScale = prefs.scale;
 
   GlyphRegistry::initialize();
 
@@ -173,13 +174,18 @@ void Greeter::syncUiScale() {
     return;
   }
 
-  const float next = m_client->uiScale();
+  const float next =
+      m_manualUiScale.has_value() ? *m_manualUiScale : m_client->uiScale();
   if (std::fabs(next - Style::uiScale()) < 0.01f) {
     return;
   }
 
   Style::setUiScale(next);
-  kLog.info("UI scale set to {:.2f}", Style::uiScale());
+  if (m_manualUiScale.has_value()) {
+    kLog.info("UI scale set to {:.2f} (manual)", Style::uiScale());
+  } else {
+    kLog.info("UI scale set to {:.2f}", Style::uiScale());
+  }
   if (m_surface != nullptr) {
     m_surface->requestLayout();
   }

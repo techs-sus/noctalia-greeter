@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 class GreeterSurface;
@@ -43,6 +44,7 @@ private:
   GreetdClient m_greetdClient;
 
   std::string m_defaultUsername;
+  std::optional<float> m_manualUiScale;
   bool m_sessionStarted = false;
   bool m_exitRequested = false;
 };
