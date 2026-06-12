@@ -4,6 +4,7 @@
 #include "greeter/greeter_preferences.h"
 #include "greeter/greeter_surface.h"
 #include "greeter/greeter_window.h"
+#include "greeter/logind_resume.h"
 #include "render/render_context.h"
 #include "render/text/glyph_registry.h"
 #include "wayland/wayland_client.h"
@@ -135,6 +136,11 @@ int Greeter::run(WaylandClient &client,
                  const std::atomic<bool> &shutdownRequested) {
   wl_display *display = client.display();
 
+  LogindResumeMonitor resumeMonitor;
+  if (std::getenv("GREETD_SOCK") != nullptr) {
+    (void)resumeMonitor.start([this]() { m_exitRequested = true; });
+  }
+
   while (!m_exitRequested &&
          !shutdownRequested.load(std::memory_order_relaxed)) {
     client.repeatTick();
@@ -154,11 +160,36 @@ int Greeter::run(WaylandClient &client,
       }
     }
 
-    pollfd pfd{};
-    pfd.fd = wl_display_get_fd(display);
-    pfd.events = POLLIN;
-    if (poll(&pfd, 1, timeoutMs) > 0) {
-      wl_display_read_events(display);
+    GPollFD glibPoll{};
+    int glibPriority = 0;
+    int pollTimeout = timeoutMs;
+    if (resumeMonitor.active()) {
+      resumeMonitor.prepareDispatch(glibPriority, glibPoll, pollTimeout);
+    }
+
+    pollfd pfds[2]{};
+    pfds[0].fd = wl_display_get_fd(display);
+    pfds[0].events = POLLIN;
+    int pollCount = 1;
+    if (glibPoll.fd >= 0) {
+      pfds[1].fd = glibPoll.fd;
+      pfds[1].events = static_cast<short>(glibPoll.events);
+      glibPoll.revents = 0;
+      pollCount = 2;
+    }
+
+    const int pollResult =
+        poll(pfds, static_cast<nfds_t>(pollCount), pollTimeout);
+    if (pollResult > 0) {
+      if (glibPoll.fd >= 0 && pfds[1].revents != 0) {
+        glibPoll.revents = pfds[1].revents;
+        resumeMonitor.checkDispatch(glibPriority, glibPoll);
+      }
+      if ((pfds[0].revents & POLLIN) != 0) {
+        wl_display_read_events(display);
+      } else {
+        wl_display_cancel_read(display);
+      }
     } else {
       wl_display_cancel_read(display);
     }
