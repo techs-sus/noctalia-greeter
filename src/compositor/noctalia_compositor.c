@@ -106,6 +106,9 @@ struct greeter_server {
   char **child_argv_ptr;
   char preferred_output[128];
   float manual_scale;
+  char cursor_theme[128];
+  int cursor_size;
+  char cursor_path[512];
   struct wlr_fractional_scale_manager_v1 *fractional_scale;
 };
 
@@ -179,12 +182,12 @@ static float output_ui_scale(const struct wlr_output *output, float manual) {
   return clamp_scale(fallback_scale_for_resolution(output));
 }
 
-static void read_greeter_config(char *out, size_t out_len,
-                                float *manual_scale) {
-  out[0] = '\0';
-  if (manual_scale != NULL) {
-    *manual_scale = 0.0f;
-  }
+static void read_greeter_config(struct greeter_server *server) {
+  server->preferred_output[0] = '\0';
+  server->manual_scale = 0.0f;
+  server->cursor_theme[0] = '\0';
+  server->cursor_size = 0;
+  server->cursor_path[0] = '\0';
 
   const char *state_dir = getenv("NOCTALIA_GREETER_STATE_DIR");
   if (state_dir == NULL || state_dir[0] == '\0') {
@@ -211,15 +214,28 @@ static void read_greeter_config(char *out, size_t out_len,
     *eq = '\0';
     char *key = trim(line);
     char *value = trim(eq + 1);
-    if (strcmp(key, "output") == 0 && value[0] != '\0' && out[0] == '\0') {
-      snprintf(out, out_len, "%s", value);
-    } else if (strcmp(key, "scale") == 0 && value[0] != '\0' &&
-               manual_scale != NULL) {
+    if (strcmp(key, "output") == 0 && value[0] != '\0' &&
+        server->preferred_output[0] == '\0') {
+      snprintf(server->preferred_output, sizeof(server->preferred_output), "%s",
+               value);
+    } else if (strcmp(key, "scale") == 0 && value[0] != '\0') {
       char *end = NULL;
       const float parsed = strtof(value, &end);
       if (end != value && parsed >= 1.0f) {
-        *manual_scale = parsed;
+        server->manual_scale = parsed;
       }
+    } else if (strcmp(key, "cursor_theme") == 0 && value[0] != '\0' &&
+               server->cursor_theme[0] == '\0') {
+      snprintf(server->cursor_theme, sizeof(server->cursor_theme), "%s", value);
+    } else if (strcmp(key, "cursor_size") == 0 && value[0] != '\0') {
+      char *end = NULL;
+      const long parsed = strtol(value, &end, 10);
+      if (end != value && parsed > 0 && parsed <= 1024) {
+        server->cursor_size = (int)parsed;
+      }
+    } else if (strcmp(key, "cursor_path") == 0 && value[0] != '\0' &&
+               server->cursor_path[0] == '\0') {
+      snprintf(server->cursor_path, sizeof(server->cursor_path), "%s", value);
     }
   }
   fclose(file);
@@ -1058,8 +1074,7 @@ int main(int argc, char **argv) {
   struct greeter_server server = {0};
   wl_list_init(&server.outputs);
   wl_list_init(&server.keyboards);
-  read_greeter_config(server.preferred_output, sizeof(server.preferred_output),
-                      &server.manual_scale);
+  read_greeter_config(&server);
 
   server.display = wl_display_create();
   if (server.display == NULL) {
@@ -1101,7 +1116,35 @@ int main(int argc, char **argv) {
   server.xdg_shell = wlr_xdg_shell_create(server.display, 6);
   server.seat = wlr_seat_create(server.display, "seat0");
   server.cursor = wlr_cursor_create();
-  server.cursor_mgr = wlr_xcursor_manager_create(NULL, 24);
+
+  const char *cursor_theme = NULL;
+  if (server.cursor_theme[0] != '\0') {
+    cursor_theme = server.cursor_theme;
+  } else {
+    const char *env_theme = getenv("XCURSOR_THEME");
+    if (env_theme != NULL && env_theme[0] != '\0') {
+      cursor_theme = env_theme;
+    }
+  }
+
+  int cursor_size = 24;
+  if (server.cursor_size > 0) {
+    cursor_size = server.cursor_size;
+  } else {
+    const char *env_size = getenv("XCURSOR_SIZE");
+    if (env_size != NULL && env_size[0] != '\0') {
+      const int parsed = atoi(env_size);
+      if (parsed > 0) {
+        cursor_size = parsed;
+      }
+    }
+  }
+
+  if (server.cursor_path[0] != '\0') {
+    setenv("XCURSOR_PATH", server.cursor_path, 1);
+  }
+
+  server.cursor_mgr = wlr_xcursor_manager_create(cursor_theme, cursor_size);
   wlr_cursor_attach_output_layout(server.cursor, server.output_layout);
   wlr_cursor_set_xcursor(server.cursor, server.cursor_mgr, "default");
 

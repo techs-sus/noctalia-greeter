@@ -141,10 +141,12 @@ using KeyValueMap = std::map<std::string, std::string>;
   out << "# default_session: admin default (Wayland session Name=)\n";
   out << "# session: last used (UI); scheme: color scheme name\n";
   out << "# output: Wayland connector; scale: UI scale; admin-only\n";
+  out << "# cursor_theme/cursor_size/cursor_path: cursor appearance; admin-only\n";
 
   static constexpr const char *kPreferredOrder[] = {
-      "greeter_user", "default_session", "session",
-      "scheme",       "output",          "scale"};
+      "greeter_user", "default_session", "session",      "scheme",
+      "output",       "scale",           "cursor_theme", "cursor_size",
+      "cursor_path"};
   for (const char *key : kPreferredOrder) {
     const auto it = map.find(key);
     if (it != map.end()) {
@@ -261,9 +263,10 @@ GreeterPreferences loadGreeterPreferences() {
   const auto path = greeterConfPath();
   const KeyValueMap map = loadKeyValues(path);
 
-  static constexpr std::array<std::string_view, 6> kKnownKeys = {
-      "greeter_user", "default_session", "session",
-      "scheme",       "output",          "scale"};
+  static constexpr std::array<std::string_view, 9> kKnownKeys = {
+      "greeter_user", "default_session", "session",      "scheme",
+      "output",       "scale",           "cursor_theme", "cursor_size",
+      "cursor_path"};
   for (const auto &[key, value] : map) {
     if (std::find(kKnownKeys.begin(), kKnownKeys.end(),
                   std::string_view(key)) == kKnownKeys.end()) {

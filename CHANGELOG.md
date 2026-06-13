@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Keyboard reference and a troubleshooting section in the README.
+- Configurable cursor theme, size and search path. The compositor now reads
+  `cursor_theme`, `cursor_size` and `cursor_path` from `greeter.conf`, falling
+  back to the `XCURSOR_THEME`, `XCURSOR_SIZE` and `XCURSOR_PATH` environment
+  variables, then the wlroots defaults. Previously the cursor theme was
+  hardcoded to the wlroots default.
+- `programs.noctalia-greeter.settings.cursor.{theme,size,package}` options in the NixOS
+  module, which inject the matching `XCURSOR_*` variables into the greetd
+  session command (so they survive greetd's empty greeter environment) and add
+  the theme package's `share/icons` to `XCURSOR_PATH`.
 
 ### Changed
 

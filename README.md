@@ -234,8 +234,33 @@ Admin-only keys in `greeter.conf` (set by you, not the UI):
 - `greeter_user` - greetd account name (setup/logging)
 - `output` - Wayland connector name (see Multi-monitor)
 - `scale` - manual compositor scale factor (e.g. `1.5`); invalid or missing → auto scale
+- `cursor_theme` - cursor theme name (e.g. `Adwaita`); missing → wlroots default cursor
+- `cursor_size` - cursor size in pixels (e.g. `24`); missing → `24`
+- `cursor_path` - colon-separated theme search path (sets `XCURSOR_PATH`); needed when the theme is not on the default search path (`~/.icons:/usr/share/icons:/usr/share/pixmaps`)
 
 The greeter updates `session` and `scheme` when you change them in the UI.
+
+## Cursor theme
+
+The compositor resolves the cursor theme, size and search path in this order:
+
+1. `cursor_theme` / `cursor_size` / `cursor_path` in `greeter.conf` (above)
+2. The `XCURSOR_THEME`, `XCURSOR_SIZE` and `XCURSOR_PATH` environment variables
+3. The wlroots defaults (built-in cursor at size `24`)
+
+greetd starts greeters with an empty environment, so to use the environment
+variables set them in the greetd session **command** rather than the service
+environment, for example in `/etc/greetd/config.toml`:
+
+```toml
+[default_session]
+command = "env XCURSOR_THEME=Adwaita XCURSOR_SIZE=24 /usr/bin/noctalia-greeter-session"
+```
+
+If the theme is not under the default search path, also set
+`XCURSOR_PATH` (or `cursor_path`) to the directory that contains it. On NixOS,
+use the `programs.noctalia-greeter.settings.cursor` options instead, which wire this up
+for you.
 
 ## Keyboard
 
