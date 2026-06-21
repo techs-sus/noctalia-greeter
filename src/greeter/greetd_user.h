@@ -8,7 +8,7 @@ namespace greeter {
   inline constexpr const char* kGreeterUserEnv = "GREETER_USER";
   inline constexpr const char* kDefaultGreeterUser = "greeter";
 
-  // Greetd session user for install/setup (logs, greeter.conf).
+  // Greetd session user for install/setup (logs, greeter.toml).
   [[nodiscard]] std::optional<std::string> resolveGreeterAccountName();
 
 } // namespace greeter

@@ -26,7 +26,7 @@ namespace {
         << "Installs appearance into "
         << greeter::appearance::syncedDataDirectory().string()
         << " (root, world-readable).\n"
-        << "--setup-system creates greeter.conf and chowns it to the "
+        << "--setup-system creates greeter.toml and chowns it to the "
            "greetd user.\n\n"
         << "Environment:\n"
         << "  "

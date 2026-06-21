@@ -37,7 +37,7 @@ fi
 chmod 0664 /var/log/noctalia-greeter.log /var/lib/noctalia-greeter/greeter.log /tmp/noctalia-greeter.log
 
 if [[ -n "${APPLY_APPEARANCE}" ]]; then
-  echo "info: installing greeter.conf via ${APPLY_APPEARANCE} --setup-system"
+  echo "info: installing greeter.toml via ${APPLY_APPEARANCE} --setup-system"
   GREETER_USER="${GREETER_USER}" "${APPLY_APPEARANCE}" --setup-system
 else
   echo "error: noctalia-greeter-apply-appearance not found; build/install first." >&2

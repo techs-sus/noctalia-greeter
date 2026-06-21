@@ -64,6 +64,10 @@ nlohmann_dep = declare_dependency(
   include_directories: include_directories('third_party/nlohmann', is_system: true),
 )
 
+tomlplusplus_dep = declare_dependency(
+  include_directories: include_directories('third_party/tomlplusplus', is_system: true),
+)
+
 # ── Wayland protocol generation ───────────────────────────────────────────────
 wayland_scanner    = find_program('wayland-scanner')
 wayland_protos_dir = wayland_protos_dep.get_variable('pkgdatadir')
@@ -155,6 +159,7 @@ _greeter_sources = files(
   'src/greetd/greetd_client.cpp',
   'src/greeter/appearance_sync.cpp',
   'src/greeter/appearance_config.cpp',
+  'src/greeter/greeter_config_io.cpp',
   'src/greeter/greeter_preferences.cpp',
   'src/greeter/greeter_sessions.cpp',
   'src/greeter/greeter_surface.cpp',
@@ -169,6 +174,7 @@ _greeter_inc = [
   include_directories('src'),
   include_directories('third_party/stb', is_system: true),
   include_directories('third_party/nlohmann', is_system: true),
+  include_directories('third_party/tomlplusplus', is_system: true),
   include_directories('third_party/wuffs', is_system: true),
 ]
 
@@ -194,6 +200,7 @@ executable('noctalia-greeter',
     stb_dep,
     libwebp_dep,
     nlohmann_dep,
+    tomlplusplus_dep,
   ],
   include_directories: _greeter_inc,
   cpp_args: [
@@ -236,6 +243,7 @@ _apply_appearance_sources = files(
   'src/core/log.cpp',
   'src/greeter/appearance_sync.cpp',
   'src/greeter/greetd_user.cpp',
+  'src/greeter/greeter_config_io.cpp',
   'src/greeter/greeter_preferences.cpp',
   'src/tools/apply_appearance_main.cpp',
 )
@@ -244,7 +252,7 @@ _greeter_tools_inc = include_directories('src')
 
 executable('noctalia-greeter-apply-appearance',
   sources: _apply_appearance_sources,
-  dependencies: [nlohmann_dep],
+  dependencies: [nlohmann_dep, tomlplusplus_dep],
   include_directories: _greeter_tools_inc,
   cpp_args: [
     '-Wall', '-Wextra', '-Wpedantic', '-Wconversion', '-Wshadow',
@@ -260,13 +268,17 @@ install_data(
 executable('noctalia-greeter-compositor',
   sources: files(
     'src/compositor/noctalia_compositor.c',
+    'src/core/log.cpp',
+    'src/greeter/greeter_config_io.cpp',
   ),
   dependencies: [
     wlroots_dep,
     libinput_dep,
     wayland_server_dep,
     xkbcommon_dep,
+    tomlplusplus_dep,
   ],
+  include_directories: include_directories('src'),
   c_args: [
     '-Wall', '-Wextra', '-Wpedantic', '-Wconversion',
     '-DWLR_USE_UNSTABLE',

@@ -117,7 +117,7 @@ namespace greeter::appearance {
     return std::filesystem::path(kDefaultSyncedDataDir);
   }
 
-  std::filesystem::path packageConfPath() { return syncedDataDirectory() / kGreeterConfFileName; }
+  std::filesystem::path packageConfPath() { return syncedDataDirectory() / kGreeterTomlFileName; }
 
   std::filesystem::path manifestPath() { return syncedDataDirectory() / kManifestFileName; }
 
@@ -279,7 +279,7 @@ namespace greeter::appearance {
     }
 
     if (!greeter::applyAppearanceSyncGreeterConf(stagedOutputLayout)) {
-      errorOut = "failed to update greeter.conf after appearance sync";
+      errorOut = "failed to update greeter.toml after appearance sync";
       return false;
     }
     return true;

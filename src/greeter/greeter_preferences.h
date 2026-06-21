@@ -29,17 +29,17 @@ namespace greeter {
   [[nodiscard]] GreeterPreferences loadGreeterPreferences();
   [[nodiscard]] bool saveGreeterPreferences(const GreeterPreferences& prefs);
 
-  // output_layout in greeter.conf: "NAME:X,Y; ..." (logical pixels, compositor + client).
+  // [output].layout in greeter.toml: "NAME:X,Y; ..." (logical pixels, compositor + client).
   [[nodiscard]] std::vector<GreeterOutputPlacement> loadGreeterOutputLayout();
 
-  // Sets scheme to Synced; updates output_layout only when stagedLayout is set.
+  // Sets [appearance].scheme to Synced; updates [output].layout only when stagedLayout is set.
   [[nodiscard]] bool applyAppearanceSyncGreeterConf(const std::optional<std::string>& stagedOutputLayout);
 
-  // greetd/CLI default (--session / --cmd); overrides greeter.conf
+  // greetd/CLI default (--session / --cmd); overrides greeter.toml
   // default_session.
   void setCliDefaultSession(std::optional<std::string> session);
 
-  // greetd/CLI default (--user); overrides greeter.conf default_user.
+  // greetd/CLI default (--user); overrides greeter.toml default_user.
   void setCliDefaultUser(std::optional<std::string> user);
 
   // CLI default → default_session → session (last used).
@@ -48,7 +48,7 @@ namespace greeter {
   // CLI default → default_user.
   [[nodiscard]] std::optional<std::string> resolveInitialUserName(const GreeterPreferences& prefs);
 
-  // Root only: synced data dir, greeter.conf, chown conf to greeterUser.
+  // Root only: synced data dir, greeter.toml, chown conf to greeterUser.
   [[nodiscard]] bool installGreeterSystemLayout(std::string_view greeterUser, std::string& errorOut);
 
 } // namespace greeter

@@ -1,5 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
+#include "greeter/greeter_config_io.h"
+
 #include <ctype.h>
 #include <libinput.h>
 #include <limits.h>
@@ -16,13 +18,13 @@
 #include <wlr/backend.h>
 #include <wlr/backend/libinput.h>
 #include <wlr/backend/session.h>
+#include <wlr/interfaces/wlr_keyboard.h>
 #include <wlr/render/allocator.h>
 #include <wlr/render/wlr_renderer.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_fractional_scale_v1.h>
-#include <wlr/interfaces/wlr_keyboard.h>
 #include <wlr/types/wlr_input_device.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_output.h>
@@ -36,8 +38,8 @@
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
-#include <xkbcommon/xkbcommon.h>
 #include <xkbcommon/xkbcommon-names.h>
+#include <xkbcommon/xkbcommon.h>
 
 #ifndef NOCTALIA_GREETER_INSTALLED_BINDIR
 #define NOCTALIA_GREETER_INSTALLED_BINDIR "/usr/local/bin"
@@ -267,59 +269,38 @@ static void read_greeter_config(struct greeter_server* server) {
   server->output_placement_count = 0;
 
   const char* state_dir = getenv("NOCTALIA_GREETER_STATE_DIR");
-  if (state_dir == NULL || state_dir[0] == '\0') {
-    state_dir = "/var/lib/noctalia-greeter";
-  }
+  struct greeter_compositor_config config;
+  greeter_compositor_config_load(state_dir, &config);
 
-  char path[512];
-  snprintf(path, sizeof(path), "%s/greeter.conf", state_dir);
-  FILE* file = fopen(path, "r");
-  if (file == NULL) {
-    return;
+  if (config.preferred_output[0] != '\0') {
+    snprintf(server->preferred_output, sizeof(server->preferred_output), "%s", config.preferred_output);
   }
-
-  char line[512];
-  while (fgets(line, sizeof(line), file) != NULL) {
-    char* hash = strchr(line, '#');
-    if (hash != NULL) {
-      *hash = '\0';
-    }
-    char* eq = strchr(line, '=');
-    if (eq == NULL) {
-      continue;
-    }
-    *eq = '\0';
-    char* key = trim(line);
-    char* value = trim(eq + 1);
-    if (strcmp(key, "output") == 0 && value[0] != '\0' && server->preferred_output[0] == '\0') {
-      snprintf(server->preferred_output, sizeof(server->preferred_output), "%s", value);
-    } else if (strcmp(key, "scale") == 0 && value[0] != '\0') {
-      char* end = NULL;
-      const float parsed = strtof(value, &end);
-      if (end != value && parsed >= 1.0f) {
-        server->manual_scale = parsed;
-      }
-    } else if (strcmp(key, "cursor_theme") == 0 && value[0] != '\0' && server->cursor_theme[0] == '\0') {
-      snprintf(server->cursor_theme, sizeof(server->cursor_theme), "%s", value);
-    } else if (strcmp(key, "cursor_size") == 0 && value[0] != '\0') {
-      char* end = NULL;
-      const long parsed = strtol(value, &end, 10);
-      if (end != value && parsed > 0 && parsed <= 1024) {
-        server->cursor_size = (int)parsed;
-      }
-    } else if (strcmp(key, "cursor_path") == 0 && value[0] != '\0' && server->cursor_path[0] == '\0') {
-      snprintf(server->cursor_path, sizeof(server->cursor_path), "%s", value);
-    } else if (strcmp(key, "output_layout") == 0 && value[0] != '\0' && server->output_placement_count == 0) {
-      parse_output_layout_value(server, value);
-    } else if (strcmp(key, "keyboard_layout") == 0 && value[0] != '\0' && server->keyboard_layout[0] == '\0') {
-      snprintf(server->keyboard_layout, sizeof(server->keyboard_layout), "%s", value);
-    } else if (strcmp(key, "keyboard_variant") == 0 && value[0] != '\0' && server->keyboard_variant[0] == '\0') {
-      snprintf(server->keyboard_variant, sizeof(server->keyboard_variant), "%s", value);
-    } else if (strcmp(key, "keyboard_options") == 0 && value[0] != '\0' && server->keyboard_options[0] == '\0') {
-      snprintf(server->keyboard_options, sizeof(server->keyboard_options), "%s", value);
-    }
+  if (config.manual_scale >= 1.0f) {
+    server->manual_scale = config.manual_scale;
   }
-  fclose(file);
+  if (config.cursor_theme[0] != '\0') {
+    snprintf(server->cursor_theme, sizeof(server->cursor_theme), "%s", config.cursor_theme);
+  }
+  if (config.cursor_size > 0) {
+    server->cursor_size = config.cursor_size;
+  }
+  if (config.cursor_path[0] != '\0') {
+    snprintf(server->cursor_path, sizeof(server->cursor_path), "%s", config.cursor_path);
+  }
+  if (config.keyboard_layout[0] != '\0') {
+    snprintf(server->keyboard_layout, sizeof(server->keyboard_layout), "%s", config.keyboard_layout);
+  }
+  if (config.keyboard_variant[0] != '\0') {
+    snprintf(server->keyboard_variant, sizeof(server->keyboard_variant), "%s", config.keyboard_variant);
+  }
+  if (config.keyboard_options[0] != '\0') {
+    snprintf(server->keyboard_options, sizeof(server->keyboard_options), "%s", config.keyboard_options);
+  }
+  if (config.output_layout[0] != '\0' && server->output_placement_count == 0) {
+    char layout[2048];
+    snprintf(layout, sizeof(layout), "%s", config.output_layout);
+    parse_output_layout_value(server, layout);
+  }
 }
 
 static struct xkb_keymap* compose_keyboard_keymap(struct xkb_context* context, const struct greeter_server* server) {
@@ -1087,9 +1068,10 @@ static void add_keyboard(struct greeter_server* server, struct wlr_input_device*
   xkb_mod_index_t num_mod = xkb_keymap_mod_get_index(keyboard->wlr_keyboard->keymap, XKB_MOD_NAME_NUM);
   if (num_mod != XKB_MOD_INVALID) {
     xkb_mod_mask_t locked = keyboard->wlr_keyboard->modifiers.locked | ((xkb_mod_mask_t)1 << num_mod);
-    wlr_keyboard_notify_modifiers(keyboard->wlr_keyboard, keyboard->wlr_keyboard->modifiers.depressed,
-                                  keyboard->wlr_keyboard->modifiers.latched, locked,
-                                  keyboard->wlr_keyboard->modifiers.group);
+    wlr_keyboard_notify_modifiers(
+        keyboard->wlr_keyboard, keyboard->wlr_keyboard->modifiers.depressed, keyboard->wlr_keyboard->modifiers.latched,
+        locked, keyboard->wlr_keyboard->modifiers.group
+    );
   }
   wlr_keyboard_set_repeat_info(keyboard->wlr_keyboard, 25, 600);
 
