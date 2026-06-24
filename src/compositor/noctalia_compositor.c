@@ -130,6 +130,7 @@ struct greeter_server {
   struct greeter_output_placement output_placements[16];
   size_t output_placement_count;
   struct wlr_fractional_scale_manager_v1* fractional_scale;
+  int output_retries_left;
 };
 
 static char* trim(char* value) {
@@ -267,6 +268,7 @@ static void read_greeter_config(struct greeter_server* server) {
   server->keyboard_variant[0] = '\0';
   server->keyboard_options[0] = '\0';
   server->output_placement_count = 0;
+  server->output_retries_left = 10;
 
   const char* state_dir = getenv("NOCTALIA_GREETER_STATE_DIR");
   struct greeter_compositor_config config;
@@ -812,7 +814,22 @@ static void schedule_launch(struct greeter_server* server) {
 
   if (use_all_outputs(server)) {
     if (!all_outputs_active(server)) {
-      return;
+      if (server->output_retries_left > 0) {
+        server->output_retries_left--;
+        struct wl_event_loop* loop = wl_display_get_event_loop(server->display);
+        if (server->launch_timer != NULL) {
+          wl_event_source_timer_update(server->launch_timer, 100);
+          return;
+        }
+        server->launch_timer = wl_event_loop_add_timer(loop, launch_timer_fired, server);
+        if (server->launch_timer != NULL) {
+          wl_event_source_timer_update(server->launch_timer, 100);
+        }
+        return;
+      }
+      if (!any_output_active(server)) {
+        return;
+      }
     }
   } else if (!any_output_active(server)) {
     return;
@@ -882,6 +899,7 @@ static void choose_outputs(struct greeter_server* server) {
   if (any_output_active(server)) {
     warp_cursor_to_initial_position(server);
   }
+  server->output_retries_left = 10;
   schedule_launch(server);
   schedule_output_frames(server);
 }
@@ -1255,8 +1273,13 @@ static void try_launch_greeter(void* data) {
   }
   if (use_all_outputs(server)) {
     if (!all_outputs_active(server)) {
-      schedule_launch(server);
-      return;
+      if (server->output_retries_left > 0) {
+        schedule_launch(server);
+        return;
+      }
+      if (!any_output_active(server)) {
+        return;
+      }
     }
   } else if (!any_output_active(server)) {
     return;
