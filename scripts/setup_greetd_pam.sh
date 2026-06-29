@@ -51,7 +51,7 @@ trap 'rm -f "${tmp}"' EXIT
 
 # Insert after last session line, or append.
 if grep -q -E "^[[:space:]]*session[[:space:]]+" "${PAM_FILE}"; then
-  last_session="$(grep -n -E "^[[:space:]]*session[[:space:]]+" "${PAM_FILE}" | tail -n 1 | awk -F: '{print $1}')"
+  last_session="$(grep -h -n -E "^[[:space:]]*session[[:space:]]+" "${PAM_FILE}" | tail -n 1 | awk -F: '{print $1}')"
   awk -v line="${PAM_LINE}" -v last="${last_session}" '
     {
       print $0
