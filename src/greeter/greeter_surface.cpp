@@ -1297,8 +1297,10 @@ void GreeterSurface::handleGreetdResponse(const GreetdResponse& response) {
                                                                           : "success";
   kLog.debug("greetd reply to {}: {}", reqName, respName);
 
-  // A cancel ack is no longer relevant.
+  // Cancel ack drained the queue; re-enable input it had locked.
   if (expected == AuthRequest::Cancel) {
+    syncAuthInteractivity();
+    commitImmediateFrame(false);
     return;
   }
 
