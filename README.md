@@ -63,6 +63,19 @@ sudo dnf install meson gcc-c++ just \
   libwebp-devel librsvg2-devel
 ```
 
+### openSUSE (Tumbleweed & Slowroll)
+
+```sh
+sudo zypper install meson gcc-c++ just \
+  greetd dbus-1 \
+  wayland-devel wayland-protocols-devel wlroots-devel \
+  Mesa-libEGL-devel Mesa-libGLESv2-devel \
+  freetype2-devel fontconfig-devel \
+  cairo-devel pango-devel harfbuzz-devel \
+  libxkbcommon-devel glib2-devel \
+  libwebp-devel librsvg-devel
+```
+
 ### Debian / Ubuntu
 
 ```sh
@@ -88,6 +101,9 @@ sudo xbps-install meson ninja pkg-config git \
 ```
 
 Vendored dependencies, with no system package needed: `nlohmann/json`, `stb`, and `Wuffs`.
+
+Dependencies that are vendored by default, with a meson option to
+instead use the system package: `tomlplusplus`
 
 Build requires `wlroots-0.20` and `wayland-server` development packages (see distro lists above).
 
