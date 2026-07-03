@@ -38,7 +38,7 @@ namespace {
   [[nodiscard]] bool isKnownCursorKey(std::string_view key) { return key == "theme" || key == "size" || key == "path"; }
 
   [[nodiscard]] bool isKnownKeyboardKey(std::string_view key) {
-    return key == "layout" || key == "variant" || key == "options";
+    return key == "layout" || key == "variant" || key == "options" || key == "numlock";
   }
 
   [[nodiscard]] std::optional<std::string> stringValue(const toml::node& node) {
@@ -163,8 +163,12 @@ namespace {
             config.keyboardLayout = stringValue(entryNode);
           } else if (entryView == "variant") {
             config.keyboardVariant = stringValue(entryNode);
-          } else {
+          } else if (entryView == "options") {
             config.keyboardOptions = stringValue(entryNode);
+          } else if (entryView == "numlock") {
+            if (const auto value = entryNode.value<bool>()) {
+              config.keyboardNumlock = *value;
+            }
           }
         }
       }
@@ -282,6 +286,9 @@ namespace {
           table.insert_or_assign(std::string(key), value);
         }
     );
+    if (config.keyboardNumlock.has_value()) {
+      keyboard.insert_or_assign("numlock", *config.keyboardNumlock);
+    }
     if (!keyboard.empty()) {
       root.insert("keyboard", std::move(keyboard));
     }
@@ -336,7 +343,7 @@ namespace greeter::config {
     std::ostringstream out;
     out << "# noctalia-greeter greeter.toml\n";
     out << "# [session] default/last, [user] default, [appearance] scheme/password_style\n";
-    out << "# [output] name/layout/scale, [cursor] theme/size/path, [keyboard] layout/variant/options\n";
+    out << "# [output] name/layout/scale, [cursor] theme/size/path, [keyboard] layout/variant/options/numlock\n";
     out << '\n';
     out << formatToml(table);
 
@@ -373,6 +380,9 @@ extern "C" void greeter_compositor_config_load(const char* state_dir, struct gre
   copyString(out->keyboard_layout, sizeof(out->keyboard_layout), config.keyboardLayout);
   copyString(out->keyboard_variant, sizeof(out->keyboard_variant), config.keyboardVariant);
   copyString(out->keyboard_options, sizeof(out->keyboard_options), config.keyboardOptions);
+  if (config.keyboardNumlock.has_value()) {
+    out->keyboard_numlock = *config.keyboardNumlock ? 1 : -1;
+  }
   copyString(out->output_layout, sizeof(out->output_layout), config.outputLayout);
 
   if (config.outputScale.has_value() && *config.outputScale >= 1.0f) {

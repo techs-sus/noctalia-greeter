@@ -26,6 +26,7 @@ namespace greeter::config {
     std::optional<std::string> keyboardLayout;
     std::optional<std::string> keyboardVariant;
     std::optional<std::string> keyboardOptions;
+    std::optional<bool> keyboardNumlock;
   };
 
   [[nodiscard]] GreeterConfigFile loadConfig(const std::filesystem::path& path);
