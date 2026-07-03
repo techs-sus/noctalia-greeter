@@ -572,14 +572,16 @@ void GreeterSurface::initialize(RenderContext* context) {
   refreshSelectionLabels();
   applyInitialUserSelection();
 
-  const auto logoPath = paths::assetPath("noctalia.svg");
-  m_brandLogoTexture = m_renderContext->textureManager().loadFromFile(logoPath.string(), 1024, true);
-  if (m_bottomBrandLogo != nullptr && m_brandLogoTexture.id != 0) {
-    m_bottomBrandLogo->setTextureId(m_brandLogoTexture.id);
-    m_bottomBrandLogo->setTextureSize(m_brandLogoTexture.width, m_brandLogoTexture.height);
-    m_bottomBrandLogo->setTint(colorForRole(ColorRole::OnSurface, 0.90f));
-  } else {
-    kLog.warn("failed loading logo texture from {}", logoPath.string());
+  if (!m_hideLogo) {
+    const auto logoPath = paths::assetPath("noctalia.svg");
+    m_brandLogoTexture = m_renderContext->textureManager().loadFromFile(logoPath.string(), 1024, true);
+    if (m_bottomBrandLogo != nullptr && m_brandLogoTexture.id != 0) {
+      m_bottomBrandLogo->setTextureId(m_brandLogoTexture.id);
+      m_bottomBrandLogo->setTextureSize(m_brandLogoTexture.width, m_brandLogoTexture.height);
+      m_bottomBrandLogo->setTint(colorForRole(ColorRole::OnSurface, 0.90f));
+    } else {
+      kLog.warn("failed loading logo texture from {}", logoPath.string());
+    }
   }
 
   requestLayout();
@@ -993,7 +995,7 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
   }
 
   if (m_bottomBrandLogo != nullptr) {
-    const bool hasBrandLogo = m_brandLogoTexture.id != 0;
+    const bool hasBrandLogo = m_brandLogoTexture.id != 0 && !m_hideLogo;
     m_bottomBrandLogo->setVisible(hasBrandLogo);
     if (hasBrandLogo) {
       const float logoSize = Style::scaled(64.0f);
@@ -1750,6 +1752,8 @@ void GreeterSurface::loadPreferences() {
       }
     }
   }
+
+  m_hideLogo = prefs.hideLogo;
 }
 
 void GreeterSurface::savePreferences() const {
