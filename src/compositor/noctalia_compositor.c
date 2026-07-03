@@ -131,6 +131,7 @@ struct greeter_server {
   struct greeter_output_placement output_placements[16];
   size_t output_placement_count;
   struct wlr_fractional_scale_manager_v1* fractional_scale;
+  bool shutting_down;
 };
 
 static char* trim(char* value) {
@@ -898,7 +899,9 @@ static void handle_output_destroy(struct wl_listener* listener, void* data) {
   wl_list_remove(&output->destroy.link);
   wl_list_remove(&output->link);
   free(output);
-  choose_outputs(server);
+  if (!server->shutting_down) {
+    choose_outputs(server);
+  }
 }
 
 static void handle_new_output(struct wl_listener* listener, void* data) {
@@ -1315,6 +1318,7 @@ static void remove_listener_if_set(struct wl_listener* listener) {
 }
 
 static void cleanup_server_listeners(struct greeter_server* server) {
+  server->shutting_down = true;
   remove_listener_if_set(&server->new_output);
   remove_listener_if_set(&server->new_input);
   remove_listener_if_set(&server->new_toplevel);
