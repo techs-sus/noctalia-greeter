@@ -160,9 +160,17 @@ namespace {
               kLog.warn("{}: invalid output.scale value", path.string());
             }
           } else if (entryView == "width") {
-            config.outputModeWidth = modeDimensionValue(entryNode);
+            if (const auto width = modeDimensionValue(entryNode)) {
+              config.outputModeWidth = *width;
+            } else {
+              kLog.warn("{}: invalid output.width value", path.string());
+            }
           } else if (entryView == "height") {
-            config.outputModeHeight = modeDimensionValue(entryNode);
+            if (const auto height = modeDimensionValue(entryNode)) {
+              config.outputModeHeight = *height;
+            } else {
+              kLog.warn("{}: invalid output.height value", path.string());
+            }
           }
         } else if (keyView == "cursor") {
           if (!isKnownCursorKey(entryView)) {

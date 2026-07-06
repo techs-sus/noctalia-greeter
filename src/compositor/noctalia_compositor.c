@@ -633,6 +633,9 @@ static void disable_output(struct greeter_output* output) {
 }
 
 static struct wlr_output_mode* select_output_mode(struct wlr_output* wlr_output, int manual_width, int manual_height) {
+  if ((manual_width > 0) != (manual_height > 0)) {
+    wlr_log(WLR_INFO, "output width/height require both values; ignoring partial manual mode for %s", wlr_output->name);
+  }
   if (manual_width > 0 && manual_height > 0) {
     struct wlr_output_mode* best = NULL;
     struct wlr_output_mode* mode;
