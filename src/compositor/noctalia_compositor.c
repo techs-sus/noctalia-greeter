@@ -121,6 +121,8 @@ struct greeter_server {
   char** child_argv_ptr;
   char preferred_output[128];
   float manual_scale;
+  int manual_mode_width;
+  int manual_mode_height;
   char cursor_theme[128];
   int cursor_size;
   char cursor_path[512];
@@ -262,6 +264,8 @@ static void parse_output_layout_value(struct greeter_server* server, char* value
 static void read_greeter_config(struct greeter_server* server) {
   server->preferred_output[0] = '\0';
   server->manual_scale = 0.0f;
+  server->manual_mode_width = 0;
+  server->manual_mode_height = 0;
   server->cursor_theme[0] = '\0';
   server->cursor_size = 0;
   server->cursor_path[0] = '\0';
@@ -279,6 +283,12 @@ static void read_greeter_config(struct greeter_server* server) {
   }
   if (config.manual_scale >= 1.0f) {
     server->manual_scale = config.manual_scale;
+  }
+  if (config.manual_mode_width > 0) {
+    server->manual_mode_width = config.manual_mode_width;
+  }
+  if (config.manual_mode_height > 0) {
+    server->manual_mode_height = config.manual_mode_height;
   }
   if (config.cursor_theme[0] != '\0') {
     snprintf(server->cursor_theme, sizeof(server->cursor_theme), "%s", config.cursor_theme);
@@ -622,7 +632,24 @@ static void disable_output(struct greeter_output* output) {
   }
 }
 
-static struct wlr_output_mode* select_output_mode(struct wlr_output* wlr_output) {
+static struct wlr_output_mode* select_output_mode(struct wlr_output* wlr_output, int manual_width, int manual_height) {
+  if (manual_width > 0 && manual_height > 0) {
+    struct wlr_output_mode* best = NULL;
+    struct wlr_output_mode* mode;
+    wl_list_for_each(mode, &wlr_output->modes, link) {
+      if (mode->width != manual_width || mode->height != manual_height) {
+        continue;
+      }
+      if (best == NULL || mode->refresh > best->refresh) {
+        best = mode;
+      }
+    }
+    if (best != NULL) {
+      return best;
+    }
+    wlr_log(WLR_INFO, "no mode %dx%d for %s; falling back to preferred", manual_width, manual_height, wlr_output->name);
+  }
+
   struct wlr_output_mode* preferred = wlr_output_preferred_mode(wlr_output);
   if (preferred == NULL) {
     return NULL;
@@ -656,12 +683,13 @@ static bool commit_output_enabled(struct greeter_output* output) {
   struct wlr_output_state state;
   wlr_output_state_init(&state);
   wlr_output_state_set_enabled(&state, true);
-  struct wlr_output_mode* mode = select_output_mode(output->wlr_output);
+  struct wlr_output_mode* mode =
+      select_output_mode(output->wlr_output, server->manual_mode_width, server->manual_mode_height);
   if (mode != NULL) {
     wlr_output_state_set_mode(&state, mode);
     wlr_log(WLR_INFO, "selected output mode: %dx%d @ %.3f Hz", mode->width, mode->height, mode->refresh / 1000.0);
   }
-  const float scale = output_ui_scale(output->wlr_output, output->server->manual_scale);
+  const float scale = output_ui_scale(output->wlr_output, server->manual_scale);
   wlr_output_state_set_scale(&state, scale);
   bool ok = wlr_output_commit_state(output->wlr_output, &state);
   wlr_output_state_finish(&state);

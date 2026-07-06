@@ -19,6 +19,8 @@ namespace greeter::config {
     std::optional<std::string> outputName;
     std::optional<std::string> outputLayout;
     std::optional<float> outputScale;
+    std::optional<int> outputModeWidth;
+    std::optional<int> outputModeHeight;
 
     std::optional<std::string> cursorTheme;
     std::optional<int> cursorSize;
