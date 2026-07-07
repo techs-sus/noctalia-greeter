@@ -92,6 +92,8 @@ in
         settings.default_session.command = lib.mkDefault "${cfg.package}/bin/noctalia-greeter-session -- ${cfg.greeter-args}";
       };
 
+      services.accounts-daemon.enable = lib.mkDefault true;
+
       assertions = [
         {
           assertion = (config.users.users.${user} or { }) != { };
