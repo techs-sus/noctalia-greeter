@@ -587,6 +587,10 @@ static void handle_output_frame(struct wl_listener* listener, void* data) {
   struct timespec now;
   clock_gettime(CLOCK_MONOTONIC, &now);
   wlr_scene_output_send_frame_done(scene_output, &now);
+
+  // Keep the greeter compositor repainting so scanout recovers cleanly after
+  // idle or output power transitions even when the scene itself is static.
+  schedule_output_frames(output->server);
 }
 
 static void handle_output_request_state(struct wl_listener* listener, void* data) {
