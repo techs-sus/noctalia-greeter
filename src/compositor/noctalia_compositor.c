@@ -100,6 +100,11 @@ struct greeter_output_placement {
   int y;
 };
 
+struct greeter_output_transform {
+  char name[128];
+  enum wl_output_transform transform;
+};
+
 struct greeter_server {
   struct wl_display* display;
   struct wlr_backend* backend;
@@ -141,6 +146,8 @@ struct greeter_server {
   float manual_scale;
   int manual_mode_width;
   int manual_mode_height;
+  struct greeter_output_transform output_transforms[16];
+  size_t output_transform_count;
   int idle_timeout_sec;
   struct timespec last_activity;
   int idle_timerfd;
@@ -284,11 +291,112 @@ static void parse_output_layout_value(struct greeter_server* server, char* value
   }
 }
 
+static bool parse_transform_token(const char* token, enum wl_output_transform* out) {
+  if (token == NULL || token[0] == '\0' || out == NULL) {
+    return false;
+  }
+  if (strcmp(token, "normal") == 0 || strcmp(token, "0") == 0 || strcmp(token, "none") == 0) {
+    *out = WL_OUTPUT_TRANSFORM_NORMAL;
+    return true;
+  }
+  if (strcmp(token, "90") == 0) {
+    *out = WL_OUTPUT_TRANSFORM_90;
+    return true;
+  }
+  if (strcmp(token, "180") == 0) {
+    *out = WL_OUTPUT_TRANSFORM_180;
+    return true;
+  }
+  if (strcmp(token, "270") == 0) {
+    *out = WL_OUTPUT_TRANSFORM_270;
+    return true;
+  }
+  if (strcmp(token, "flipped") == 0) {
+    *out = WL_OUTPUT_TRANSFORM_FLIPPED;
+    return true;
+  }
+  if (strcmp(token, "flipped-90") == 0 || strcmp(token, "flipped_90") == 0) {
+    *out = WL_OUTPUT_TRANSFORM_FLIPPED_90;
+    return true;
+  }
+  if (strcmp(token, "flipped-180") == 0 || strcmp(token, "flipped_180") == 0) {
+    *out = WL_OUTPUT_TRANSFORM_FLIPPED_180;
+    return true;
+  }
+  if (strcmp(token, "flipped-270") == 0 || strcmp(token, "flipped_270") == 0) {
+    *out = WL_OUTPUT_TRANSFORM_FLIPPED_270;
+    return true;
+  }
+  return false;
+}
+
+static bool parse_output_transform_entry(const char* token, struct greeter_output_transform* out) {
+  char buf[256];
+  snprintf(buf, sizeof(buf), "%s", token);
+  char* colon = strrchr(buf, ':');
+  if (colon == NULL || colon == buf) {
+    return false;
+  }
+  *colon = '\0';
+  char* name = trim(buf);
+  char* transform_raw = trim(colon + 1);
+  if (name[0] == '\0' || transform_raw[0] == '\0') {
+    return false;
+  }
+  enum wl_output_transform transform = WL_OUTPUT_TRANSFORM_NORMAL;
+  if (!parse_transform_token(transform_raw, &transform)) {
+    return false;
+  }
+  snprintf(out->name, sizeof(out->name), "%s", name);
+  out->transform = transform;
+  return true;
+}
+
+static void parse_output_transforms_value(struct greeter_server* server, char* value) {
+  server->output_transform_count = 0;
+  for (char* p = value; *p != '\0'; ++p) {
+    if (*p == ';') {
+      *p = ' ';
+    }
+  }
+
+  char* saveptr = NULL;
+  for (char* token = strtok_r(value, " \t", &saveptr); token != NULL; token = strtok_r(NULL, " \t", &saveptr)) {
+    if (server->output_transform_count >= sizeof(server->output_transforms) / sizeof(server->output_transforms[0])) {
+      wlr_log(
+          WLR_ERROR, "output_transforms: too many entries (max %zu)",
+          sizeof(server->output_transforms) / sizeof(server->output_transforms[0])
+      );
+      break;
+    }
+    struct greeter_output_transform entry;
+    if (!parse_output_transform_entry(token, &entry)) {
+      wlr_log(WLR_ERROR, "output_transforms: invalid entry '%s' (use NAME:90)", token);
+      continue;
+    }
+    server->output_transforms[server->output_transform_count++] = entry;
+    wlr_log(WLR_INFO, "output transform: %s -> %d", entry.name, (int)entry.transform);
+  }
+}
+
+static enum wl_output_transform transform_for_output(const struct greeter_server* server, const char* name) {
+  if (name == NULL || name[0] == '\0') {
+    return WL_OUTPUT_TRANSFORM_NORMAL;
+  }
+  for (size_t i = 0; i < server->output_transform_count; ++i) {
+    if (strcmp(server->output_transforms[i].name, name) == 0) {
+      return server->output_transforms[i].transform;
+    }
+  }
+  return WL_OUTPUT_TRANSFORM_NORMAL;
+}
+
 static void read_greeter_config(struct greeter_server* server) {
   server->preferred_output[0] = '\0';
   server->manual_scale = 0.0f;
   server->manual_mode_width = 0;
   server->manual_mode_height = 0;
+  server->output_transform_count = 0;
   server->idle_timeout_sec = 0;
   server->cursor_theme[0] = '\0';
   server->cursor_size = 0;
@@ -362,6 +470,11 @@ static void read_greeter_config(struct greeter_server* server) {
     char layout[2048];
     snprintf(layout, sizeof(layout), "%s", config.output_layout);
     parse_output_layout_value(server, layout);
+  }
+  if (config.output_transforms[0] != '\0') {
+    char transforms[2048];
+    snprintf(transforms, sizeof(transforms), "%s", config.output_transforms);
+    parse_output_transforms_value(server, transforms);
   }
 }
 
@@ -864,6 +977,8 @@ static bool commit_output_enabled(struct greeter_output* output) {
     wlr_output_state_set_mode(&state, mode);
     wlr_log(WLR_INFO, "selected output mode: %dx%d @ %.3f Hz", mode->width, mode->height, mode->refresh / 1000.0);
   }
+  const enum wl_output_transform transform = transform_for_output(server, output->wlr_output->name);
+  wlr_output_state_set_transform(&state, transform);
   const float scale = output_ui_scale(output->wlr_output, server->manual_scale);
   wlr_output_state_set_scale(&state, scale);
   bool ok = wlr_output_commit_state(output->wlr_output, &state);
@@ -873,7 +988,7 @@ static bool commit_output_enabled(struct greeter_output* output) {
     return false;
   }
 
-  wlr_log(WLR_INFO, "output %s scale=%.2f", output->wlr_output->name, scale);
+  wlr_log(WLR_INFO, "output %s scale=%.2f transform=%d", output->wlr_output->name, scale, (int)transform);
   return true;
 }
 

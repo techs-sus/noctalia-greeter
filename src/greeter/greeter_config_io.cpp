@@ -36,7 +36,12 @@ namespace {
   }
 
   [[nodiscard]] bool isKnownOutputKey(std::string_view key) {
-    return key == "name" || key == "layout" || key == "scale" || key == "width" || key == "height";
+    return key == "name"
+        || key == "layout"
+        || key == "scale"
+        || key == "width"
+        || key == "height"
+        || key == "transforms";
   }
 
   [[nodiscard]] bool isKnownIdleKey(std::string_view key) { return key == "timeout"; }
@@ -183,6 +188,8 @@ namespace {
             } else {
               kLog.warn("{}: invalid output.height value", path.string());
             }
+          } else if (entryView == "transforms") {
+            config.outputTransforms = stringValue(entryNode);
           }
         } else if (keyView == "idle") {
           if (!isKnownIdleKey(entryView)) {
@@ -318,6 +325,12 @@ namespace {
     if (config.outputModeHeight.has_value()) {
       output.insert_or_assign("height", static_cast<int64_t>(*config.outputModeHeight));
     }
+    insertString(
+        output, "transforms", config.outputTransforms,
+        [](toml::table& table, std::string_view key, const std::string& value) {
+          table.insert_or_assign(std::string(key), value);
+        }
+    );
     if (!output.empty()) {
       root.insert("output", std::move(output));
     }
@@ -428,7 +441,7 @@ namespace greeter::config {
     std::ostringstream out;
     out << "# noctalia-greeter greeter.toml\n";
     out << "# [session] default/last, [user] default, [appearance] scheme/password_style/hide_logo\n";
-    out << "# [output] name/layout/scale/width/height, [idle] timeout, [cursor] theme/size/path\n";
+    out << "# [output] name/layout/scale/width/height/transforms, [idle] timeout, [cursor] theme/size/path\n";
     out << "# [keyboard] layout/variant/options/numlock\n";
     out << "# [auth] allow_empty_password (bool, default false; enables fingerprint/smartcard PAM auth)\n";
     out << '\n';
@@ -471,6 +484,7 @@ extern "C" void greeter_compositor_config_load(const char* state_dir, struct gre
     out->keyboard_numlock = *config.keyboardNumlock ? 1 : -1;
   }
   copyString(out->output_layout, sizeof(out->output_layout), config.outputLayout);
+  copyString(out->output_transforms, sizeof(out->output_transforms), config.outputTransforms);
 
   if (config.outputScale.has_value() && *config.outputScale >= 1.0f) {
     out->manual_scale = *config.outputScale;
