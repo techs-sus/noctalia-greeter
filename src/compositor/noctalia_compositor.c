@@ -332,7 +332,13 @@ static bool parse_transform_token(const char* token, enum wl_output_transform* o
 
 static bool parse_output_transform_entry(const char* token, struct greeter_output_transform* out) {
   char buf[256];
-  snprintf(buf, sizeof(buf), "%s", token);
+  if (token == NULL || out == NULL) {
+    return false;
+  }
+  const int token_len = snprintf(buf, sizeof(buf), "%s", token);
+  if (token_len < 0 || (size_t)token_len >= sizeof(buf)) {
+    return false;
+  }
   char* colon = strrchr(buf, ':');
   if (colon == NULL || colon == buf) {
     return false;
@@ -347,7 +353,10 @@ static bool parse_output_transform_entry(const char* token, struct greeter_outpu
   if (!parse_transform_token(transform_raw, &transform)) {
     return false;
   }
-  snprintf(out->name, sizeof(out->name), "%s", name);
+  const int name_len = snprintf(out->name, sizeof(out->name), "%s", name);
+  if (name_len < 0 || (size_t)name_len >= sizeof(out->name)) {
+    return false;
+  }
   out->transform = transform;
   return true;
 }
