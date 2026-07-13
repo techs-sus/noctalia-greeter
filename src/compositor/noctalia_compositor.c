@@ -11,7 +11,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/timerfd.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 #include <wayland-server-core.h>
 #include <wayland-server-protocol.h>
@@ -139,6 +141,11 @@ struct greeter_server {
   float manual_scale;
   int manual_mode_width;
   int manual_mode_height;
+  int idle_timeout_sec;
+  struct timespec last_activity;
+  int idle_timerfd;
+  struct wl_event_source* idle_timerfd_source;
+  bool screens_blanked;
   char cursor_theme[128];
   int cursor_size;
   char cursor_path[512];
@@ -282,6 +289,7 @@ static void read_greeter_config(struct greeter_server* server) {
   server->manual_scale = 0.0f;
   server->manual_mode_width = 0;
   server->manual_mode_height = 0;
+  server->idle_timeout_sec = 0;
   server->cursor_theme[0] = '\0';
   server->cursor_size = 0;
   server->cursor_path[0] = '\0';
@@ -305,6 +313,31 @@ static void read_greeter_config(struct greeter_server* server) {
   }
   if (config.manual_mode_height > 0) {
     server->manual_mode_height = config.manual_mode_height;
+  }
+  if (config.idle_timeout_sec > 0) {
+    server->idle_timeout_sec = config.idle_timeout_sec;
+  }
+  const char* env_idle = getenv("NOCTALIA_GREETER_IDLE_TIMEOUT");
+  if (env_idle != NULL && env_idle[0] != '\0') {
+    const char* cursor = env_idle;
+    while (isspace((unsigned char)*cursor)) {
+      cursor++;
+    }
+    char* end = NULL;
+    const long parsed = strtol(cursor, &end, 10);
+    if (end != cursor) {
+      while (isspace((unsigned char)*end)) {
+        end++;
+      }
+    }
+    if (end != cursor && *end == '\0' && parsed >= 0 && parsed <= 86400) {
+      server->idle_timeout_sec = (int)parsed;
+    } else {
+      wlr_log(WLR_ERROR, "invalid NOCTALIA_GREETER_IDLE_TIMEOUT='%s' (expected 0..86400)", env_idle);
+    }
+  }
+  if (server->idle_timeout_sec > 0) {
+    wlr_log(WLR_INFO, "idle blanking enabled: %ds", server->idle_timeout_sec);
   }
   if (config.cursor_theme[0] != '\0') {
     snprintf(server->cursor_theme, sizeof(server->cursor_theme), "%s", config.cursor_theme);
@@ -651,6 +684,96 @@ static void handle_output_request_state(struct wl_listener* listener, void* data
   }
 
   choose_outputs(output->server);
+}
+
+enum { IDLE_POLL_MS = 2000 };
+
+static bool any_active_enabled_output(const struct greeter_server* server) {
+  const struct greeter_output* output;
+  wl_list_for_each(output, &server->outputs, link) {
+    if (output->active && output->wlr_output->enabled) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static void set_outputs_power(struct greeter_server* server, bool on) {
+  bool toggled = false;
+  struct greeter_output* output;
+  wl_list_for_each(output, &server->outputs, link) {
+    if (!output->active || on == output->wlr_output->enabled) {
+      continue;
+    }
+    struct wlr_output_state state;
+    wlr_output_state_init(&state);
+    wlr_output_state_set_enabled(&state, on);
+    if (!wlr_output_commit_state(output->wlr_output, &state)) {
+      wlr_log(WLR_ERROR, "failed to %s output %s", on ? "enable" : "disable", output->wlr_output->name);
+    } else {
+      toggled = true;
+      if (on && output->scene_output != NULL) {
+        wlr_output_schedule_frame(output->wlr_output);
+      }
+    }
+    wlr_output_state_finish(&state);
+  }
+  if (toggled) {
+    server->screens_blanked = !on;
+    if (on) {
+      schedule_output_frames(server);
+    }
+    return;
+  }
+  // Nothing to disable (already off / no active outputs): still mark blanked so idle poll stops.
+  if (!on && !any_active_enabled_output(server)) {
+    server->screens_blanked = true;
+  }
+}
+
+static void note_activity(struct greeter_server* server) {
+  clock_gettime(CLOCK_MONOTONIC, &server->last_activity);
+  if (server->screens_blanked) {
+    set_outputs_power(server, true);
+  }
+}
+
+// Pointer/scroll noise must not reset the idle timer — only wake after blank.
+static void note_pointer_activity(struct greeter_server* server) {
+  if (server->screens_blanked) {
+    note_activity(server);
+  }
+}
+
+static void check_idle_timeout(struct greeter_server* server) {
+  if (server->idle_timeout_sec <= 0 || server->screens_blanked) {
+    return;
+  }
+  struct timespec now;
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  const time_t idle_sec = now.tv_sec - server->last_activity.tv_sec;
+  if (idle_sec < server->idle_timeout_sec) {
+    return;
+  }
+  if (!any_active_enabled_output(server)) {
+    // Already dark / no active outputs: stop retrying until a wake event.
+    server->screens_blanked = true;
+    return;
+  }
+  wlr_log(WLR_INFO, "idle timeout reached (%lds idle), blanking outputs", (long)idle_sec);
+  set_outputs_power(server, false);
+}
+
+// wl_event_loop_add_timer has not fired reliably on some greetd/NVIDIA stacks; timerfd does.
+static int handle_idle_timerfd(int fd, uint32_t mask, void* data) {
+  struct greeter_server* server = data;
+  (void)mask;
+  uint64_t ticks;
+  if (read(fd, &ticks, sizeof(ticks)) != (ssize_t)sizeof(ticks)) {
+    return 0;
+  }
+  check_idle_timeout(server);
+  return 0;
 }
 
 static void disable_output(struct greeter_output* output) {
@@ -1055,6 +1178,8 @@ static struct greeter_touch_point* touch_point_for_id(struct greeter_server* ser
 static void handle_cursor_touch_down(struct wl_listener* listener, void* data) {
   struct greeter_server* server = wl_container_of(listener, server, cursor_touch_down);
   struct wlr_touch_down_event* event = data;
+  // Touch-down is press-equivalent: reset idle and wake blanked outputs even with no surface hit.
+  note_activity(server);
   double lx;
   double ly;
   wlr_cursor_absolute_to_layout_coords(server->cursor, &event->touch->base, event->x, event->y, &lx, &ly);
@@ -1137,6 +1262,7 @@ static void handle_cursor_touch_frame(struct wl_listener* listener, void* data) 
 static void handle_cursor_motion(struct wl_listener* listener, void* data) {
   struct greeter_server* server = wl_container_of(listener, server, cursor_motion);
   struct wlr_pointer_motion_event* event = data;
+  note_pointer_activity(server);
   wlr_cursor_move(server->cursor, &event->pointer->base, event->delta_x, event->delta_y);
   pointer_focus(server, server->cursor->x, server->cursor->y);
 }
@@ -1144,6 +1270,7 @@ static void handle_cursor_motion(struct wl_listener* listener, void* data) {
 static void handle_cursor_motion_absolute(struct wl_listener* listener, void* data) {
   struct greeter_server* server = wl_container_of(listener, server, cursor_motion_absolute);
   struct wlr_pointer_motion_absolute_event* event = data;
+  note_pointer_activity(server);
   wlr_cursor_warp_absolute(server->cursor, &event->pointer->base, event->x, event->y);
   pointer_focus(server, server->cursor->x, server->cursor->y);
 }
@@ -1151,6 +1278,9 @@ static void handle_cursor_motion_absolute(struct wl_listener* listener, void* da
 static void handle_cursor_button(struct wl_listener* listener, void* data) {
   struct greeter_server* server = wl_container_of(listener, server, cursor_button);
   struct wlr_pointer_button_event* event = data;
+  if (event->state == WL_POINTER_BUTTON_STATE_PRESSED) {
+    note_activity(server);
+  }
   pointer_focus(server, server->cursor->x, server->cursor->y);
   wlr_seat_pointer_notify_button(server->seat, event->time_msec, event->button, event->state);
 }
@@ -1158,6 +1288,7 @@ static void handle_cursor_button(struct wl_listener* listener, void* data) {
 static void handle_cursor_axis(struct wl_listener* listener, void* data) {
   struct greeter_server* server = wl_container_of(listener, server, cursor_axis);
   struct wlr_pointer_axis_event* event = data;
+  note_pointer_activity(server);
   wlr_seat_pointer_notify_axis(
       server->seat, event->time_msec, event->orientation, event->delta, event->delta_discrete, event->source,
       event->relative_direction
@@ -1203,6 +1334,9 @@ static void handle_keyboard_key(struct wl_listener* listener, void* data) {
     }
   }
 
+  if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+    note_activity(server);
+  }
   wlr_seat_keyboard_notify_key(server->seat, event->time_msec, event->keycode, event->state);
 }
 
@@ -1551,10 +1685,12 @@ int main(int argc, char** argv) {
   wlr_log_init(WLR_INFO, NULL);
 
   struct greeter_server server = {0};
+  server.idle_timerfd = -1;
   wl_list_init(&server.outputs);
   wl_list_init(&server.keyboards);
   wl_list_init(&server.touch_points);
   read_greeter_config(&server);
+  clock_gettime(CLOCK_MONOTONIC, &server.last_activity);
 
   server.display = wl_display_create();
   if (server.display == NULL) {
@@ -1675,6 +1811,30 @@ int main(int argc, char** argv) {
 
   struct wl_event_loop* loop = wl_display_get_event_loop(server.display);
   server.sigchld_source = wl_event_loop_add_signal(loop, SIGCHLD, handle_sigchld, &server);
+  if (server.idle_timeout_sec > 0) {
+    server.idle_timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+    if (server.idle_timerfd < 0) {
+      wlr_log(WLR_ERROR, "idle timerfd create failed");
+    } else {
+      const struct itimerspec interval = {
+          .it_interval = {.tv_sec = IDLE_POLL_MS / 1000, .tv_nsec = (IDLE_POLL_MS % 1000) * 1000000L},
+          .it_value = {.tv_sec = IDLE_POLL_MS / 1000, .tv_nsec = (IDLE_POLL_MS % 1000) * 1000000L},
+      };
+      if (timerfd_settime(server.idle_timerfd, 0, &interval, NULL) != 0) {
+        wlr_log(WLR_ERROR, "idle timerfd settime failed");
+        close(server.idle_timerfd);
+        server.idle_timerfd = -1;
+      } else {
+        server.idle_timerfd_source =
+            wl_event_loop_add_fd(loop, server.idle_timerfd, WL_EVENT_READABLE, handle_idle_timerfd, &server);
+        if (server.idle_timerfd_source == NULL) {
+          wlr_log(WLR_ERROR, "idle timerfd event source failed");
+          close(server.idle_timerfd);
+          server.idle_timerfd = -1;
+        }
+      }
+    }
+  }
   server.child_argc = argc;
   server.child_argv_ptr = argv;
   schedule_launch(&server);
@@ -1687,6 +1847,12 @@ int main(int argc, char** argv) {
   }
   if (server.sigchld_source != NULL) {
     wl_event_source_remove(server.sigchld_source);
+  }
+  if (server.idle_timerfd_source != NULL) {
+    wl_event_source_remove(server.idle_timerfd_source);
+  }
+  if (server.idle_timerfd >= 0) {
+    close(server.idle_timerfd);
   }
   cleanup_server_listeners(&server);
   wl_display_destroy_clients(server.display);

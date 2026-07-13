@@ -22,6 +22,8 @@ namespace greeter::config {
     std::optional<int> outputModeWidth;
     std::optional<int> outputModeHeight;
 
+    std::optional<int> idleTimeoutSec;
+
     std::optional<std::string> cursorTheme;
     std::optional<int> cursorSize;
     std::optional<std::string> cursorPath;

@@ -11,6 +11,7 @@ struct greeter_compositor_config {
   float manual_scale;
   int manual_mode_width;
   int manual_mode_height;
+  int idle_timeout_sec;
   char cursor_theme[128];
   int cursor_size;
   char cursor_path[512];
