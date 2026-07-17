@@ -5,6 +5,7 @@
 #include <gio/gio.h>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace accounts {
 
@@ -69,7 +70,71 @@ namespace accounts {
       return !path.empty() && std::filesystem::is_regular_file(path, ec) && !ec;
     }
 
+    [[nodiscard]] bool shellAllowsLogin(const std::string& shell) {
+      return shell.find("nologin") == std::string::npos && shell.find("false") == std::string::npos;
+    }
+
   } // namespace
+
+  std::vector<CachedUser> listCachedUsers() {
+    std::vector<CachedUser> users;
+
+    GError* error = nullptr;
+    GDBusConnection* connection = g_bus_get_sync(G_BUS_TYPE_SYSTEM, nullptr, &error);
+    if (connection == nullptr) {
+      if (error != nullptr) {
+        g_error_free(error);
+      }
+      return users;
+    }
+
+    GVariant* result = g_dbus_connection_call_sync(
+        connection, "org.freedesktop.Accounts", "/org/freedesktop/Accounts", "org.freedesktop.Accounts",
+        "ListCachedUsers", nullptr, G_VARIANT_TYPE("(ao)"), G_DBUS_CALL_FLAGS_NONE, 5000, nullptr, &error
+    );
+    if (result == nullptr) {
+      if (error != nullptr) {
+        g_error_free(error);
+      }
+      g_object_unref(connection);
+      return users;
+    }
+
+    GVariantIter* pathIter = nullptr;
+    g_variant_get(result, "(ao)", &pathIter);
+    const char* userPath = nullptr;
+    while (g_variant_iter_next(pathIter, "&o", &userPath)) {
+      if (userPath == nullptr || userPath[0] == '\0') {
+        continue;
+      }
+
+      const auto username = dbusUserStringProperty(connection, userPath, "UserName");
+      if (!username.has_value()) {
+        continue;
+      }
+
+      const auto shell = dbusUserStringProperty(connection, userPath, "Shell").value_or("");
+      if (!shell.empty() && !shellAllowsLogin(shell)) {
+        continue;
+      }
+
+      CachedUser entry;
+      entry.username = *username;
+      if (const auto uid = dbusUserUint64Property(connection, userPath, "Uid")) {
+        entry.uid = static_cast<uid_t>(*uid);
+      }
+      if (const auto icon = dbusUserStringProperty(connection, userPath, "IconFile")) {
+        if (iconPathReadable(*icon)) {
+          entry.iconPath = *icon;
+        }
+      }
+      users.push_back(std::move(entry));
+    }
+    g_variant_iter_free(pathIter);
+    g_variant_unref(result);
+    g_object_unref(connection);
+    return users;
+  }
 
   std::optional<std::string> iconFileForUid(const uid_t uid) {
     GError* error = nullptr;

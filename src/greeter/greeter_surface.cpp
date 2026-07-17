@@ -603,8 +603,19 @@ void GreeterSurface::applyInitialUserSelection() {
       }
     }
 
-    m_passwordVisible = false;
-    kLog.warn("default_user '{}' is not in the greeter user list", *initialUser);
+    // Domain / FreeIPA users may be absent from the picker until cached; still
+    // honor --user / [user].default so PAM can resolve them by name.
+    m_users.push_back(*initialUser);
+    m_userUids.push_back(0);
+    m_userIconPaths.push_back("");
+    m_selectedUser = m_users.size() - 1;
+    setUsername(*initialUser);
+    m_passwordVisible = true;
+    m_password.clear();
+    if (m_passwordField != nullptr) {
+      m_passwordField->setValue("");
+    }
+    kLog.info("default_user '{}' not in user list; opening password step anyway", *initialUser);
     return;
   }
 
@@ -1483,8 +1494,28 @@ void GreeterSurface::loadUsers() {
       "greeter", "greetd", "sddm", "lightdm", "gdm", "nobody",
   };
 
-  int userEnumerationErrno = 0;
+  std::unordered_set<std::string> seen;
 
+  // Prefer AccountsService cached users (same source as ReGreet) so FreeIPA /
+  // LDAP accounts that have logged in here appear even when NSS enumeration
+  // does not list them.
+  const auto cachedUsers = accounts::listCachedUsers();
+  for (const auto& cached : cachedUsers) {
+    if (cached.username.empty() || kHiddenSystemUsers.contains(cached.username)) {
+      continue;
+    }
+    if (!seen.insert(cached.username).second) {
+      continue;
+    }
+    m_users.push_back(cached.username);
+    m_userUids.push_back(cached.uid);
+    m_userIconPaths.push_back(cached.iconPath);
+  }
+  if (!cachedUsers.empty()) {
+    kLog.info("AccountsService: {} cached user(s), {} after filters", cachedUsers.size(), m_users.size());
+  }
+
+  int userEnumerationErrno = 0;
   ::setpwent();
   while (true) {
     errno = 0;
@@ -1508,8 +1539,12 @@ void GreeterSurface::loadUsers() {
     if (shell.find("nologin") != std::string::npos || shell.find("false") != std::string::npos) {
       continue;
     }
+    if (!seen.insert(user).second) {
+      continue;
+    }
     m_users.push_back(user);
     m_userUids.push_back(uid);
+    m_userIconPaths.push_back(accounts::iconFileForUid(uid).value_or(""));
   }
   ::endpwent();
 
@@ -1520,13 +1555,12 @@ void GreeterSurface::loadUsers() {
   if (m_users.empty()) {
     m_users.push_back("greeter");
     m_userUids.push_back(0);
+    m_userIconPaths.push_back("");
   }
 
   appendDummyUsers(m_users, m_userUids);
-
-  m_userIconPaths.reserve(m_userUids.size());
-  for (const uid_t uid : m_userUids) {
-    m_userIconPaths.push_back(accounts::iconFileForUid(uid).value_or(""));
+  while (m_userIconPaths.size() < m_users.size()) {
+    m_userIconPaths.push_back("");
   }
 
   m_selectedUser = 0;
