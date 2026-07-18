@@ -20,21 +20,17 @@ echo "info: applying greetd PAM runtime module patch..."
 "${SCRIPT_DIR}/setup_greetd_pam.sh"
 
 echo "info: preparing greeter paths..."
-mkdir -p "${SYNCED_DATA_DIR}"
-chmod 0755 "${SYNCED_DATA_DIR}"
-if id -u "${GREETER_USER}" >/dev/null 2>&1; then
-  chown "${GREETER_USER}:${GREETER_USER}" "${SYNCED_DATA_DIR}"
-fi
-touch /var/log/noctalia-greeter.log /var/lib/noctalia-greeter/greeter.log /tmp/noctalia-greeter.log
+ensure_greeter_paths "${GREETER_USER}"
 
-if id -u "${GREETER_USER}" >/dev/null 2>&1; then
-  chown "${GREETER_USER}:${GREETER_USER}" /var/log/noctalia-greeter.log \
-    /var/lib/noctalia-greeter/greeter.log /tmp/noctalia-greeter.log
-else
-  echo "warn: user '${GREETER_USER}' does not exist yet; skipping log chown."
+# Optional: also apply systemd/opentmpfiles drop-in when present (boot recreate).
+# Portable ensure_greeter_paths above remains the source of truth for packaging.
+if command -v systemd-tmpfiles >/dev/null 2>&1; then
+  systemd-tmpfiles --create noctalia-greeter.conf 2>/dev/null || true
+elif command -v opentmpfiles >/dev/null 2>&1; then
+  opentmpfiles --create noctalia-greeter.conf 2>/dev/null || true
+elif command -v tmpfiles >/dev/null 2>&1; then
+  tmpfiles --create noctalia-greeter.conf 2>/dev/null || true
 fi
-
-chmod 0664 /var/log/noctalia-greeter.log /var/lib/noctalia-greeter/greeter.log /tmp/noctalia-greeter.log
 
 if [[ -n "${APPLY_APPEARANCE}" ]]; then
   echo "info: installing greeter.toml via ${APPLY_APPEARANCE} --setup-system"

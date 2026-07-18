@@ -290,13 +290,17 @@ On runit:
 sudo sv restart greetd
 ```
 
-Create log files once if needed:
+Create state/log paths once if needed. Prefer the portable setup (works without systemd):
 
 ```sh
+sudo ./scripts/setup_greeter_system.sh
+# or during development:
 just setup-log-dir
 ```
 
-Logs: `/var/log/noctalia-greeter.log` and `/var/lib/noctalia-greeter/greeter.log`.
+On systemd (or opentmpfiles), installs also ship `/usr/lib/tmpfiles.d/noctalia-greeter.conf` so the state dir can be recreated with `systemd-tmpfiles --create`, that drop-in hardcodes the `greeter` user; use the setup script when your greetd user differs.
+
+Log: `/var/lib/noctalia-greeter/greeter.log` (override with `NOCTALIA_GREETER_LOG`; `/tmp` is a last-resort fallback only).
 
 ## Matching Noctalia Shell
 
@@ -391,10 +395,11 @@ command = "env XKB_DEFAULT_LAYOUT=cz /usr/bin/noctalia-greeter-session"
 
 ## Troubleshooting
 
-- **Blank screen** - Check `/var/log/noctalia-greeter.log` and `/var/lib/noctalia-greeter/greeter.log`. Run `just setup-log-dir` if they are missing.
+- **Blank screen** - Check `/var/lib/noctalia-greeter/greeter.log`. Run `just setup-log-dir` or `setup_greeter_system.sh` if the state dir is missing.
+- **Wrong greeter size / only one monitor looks right** - Confirm `[output].name` in `greeter.toml` matches a connector from `noctalia-greeter outputs`. Restart greetd after changing it.
+- **Black screen after reboot** - logs survive under `/var/lib/noctalia-greeter/greeter.log` (run `just setup-log-dir` once). Session output also goes there when writable.
 - **`Failed to spawn client` / wrong path in greetd config** - `command` must be the full path from `which noctalia-greeter-session` (often `/usr/bin/...` on packaged installs, not `/usr/local/bin/...`).
 - **`WAYLAND_DISPLAY is not set`** - greetd must use `noctalia-greeter-session` (it starts `noctalia-greeter-compositor`). Fix `command` in `/etc/greetd/config.toml`.
-- **Black screen after reboot** - logs survive under `/var/log/noctalia-greeter.log` and `/var/lib/noctalia-greeter/greeter.log` (run `just setup-log-dir` once). Session output also goes there when writable.
 - **Wrong session on startup** - If `[session].default` is set in `greeter.toml`, it wins over last-used `[session].last`. Run `noctalia-greeter sessions` for exact **Name** spelling.
 - **Synced look missing** - Install shell v5 and greeter; run **Sync Now** in shell settings again; restart greetd or log out once.
 

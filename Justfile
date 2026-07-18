@@ -49,20 +49,21 @@ setup-system:
 print-greetd-config:
   ./scripts/print_greetd_config.sh
 
-# Create persistent log dirs for greetd (run once on the target machine)
+# Create persistent state/log paths for greetd (portable; any init)
 setup-log-dir:
-  sudo mkdir -p /var/lib/noctalia-greeter
-  sudo touch /var/log/noctalia-greeter.log /var/lib/noctalia-greeter/greeter.log /tmp/noctalia-greeter.log
-  sudo chown -R greeter:greeter /var/lib/noctalia-greeter
-  sudo chown greeter:greeter /var/log/noctalia-greeter.log /tmp/noctalia-greeter.log
-  sudo chmod 0664 /var/log/noctalia-greeter.log /var/lib/noctalia-greeter/greeter.log /tmp/noctalia-greeter.log
-  @echo "Logs: /var/log/noctalia-greeter.log and /var/lib/noctalia-greeter/greeter.log"
+  #!/usr/bin/env bash
+  set -euo pipefail
+  # shellcheck source=scripts/greetd_setup_lib.sh
+  source "{{justfile_directory()}}/scripts/greetd_setup_lib.sh"
+  greeter_user="$(resolve_greeter_user)"
+  sudo bash -c "source '{{justfile_directory()}}/scripts/greetd_setup_lib.sh'; ensure_greeter_paths '${greeter_user}'"
+  echo "Log: /var/lib/noctalia-greeter/greeter.log (user=${greeter_user})"
 
 # Verify greeter user can write logs (run on target machine after setup-log-dir)
 log-test: build
   sudo -u greeter env GREETD_SOCK=1 XDG_VTNR=7 ./build/noctalia-greeter --log-test
-  @echo "--- /var/log/noctalia-greeter.log ---"
-  @cat /var/log/noctalia-greeter.log | tail -5
+  @echo "--- /var/lib/noctalia-greeter/greeter.log ---"
+  @tail -5 /var/lib/noctalia-greeter/greeter.log
 
 # Uninstall
 uninstall:

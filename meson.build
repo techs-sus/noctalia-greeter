@@ -271,6 +271,13 @@ install_data(
   install_dir: get_option('datadir') / 'polkit-1' / 'actions',
 )
 
+# Optional systemd/opentmpfiles drop-in (hardcoded greeter:greeter).
+# Portable installs should run setup_greeter_system.sh in postinst instead.
+install_data(
+  'data/tmpfiles.d/noctalia-greeter.conf',
+  install_dir: get_option('prefix') / 'lib' / 'tmpfiles.d',
+)
+
 executable('noctalia-greeter-compositor',
   sources: files(
     'src/compositor/noctalia_compositor.c',

@@ -126,7 +126,6 @@ namespace {
     tryRuntimeLog();
 
     static constexpr const char* kCandidates[] = {
-        "/var/log/noctalia-greeter.log",
         "/var/lib/noctalia-greeter/greeter.log",
         "/tmp/noctalia-greeter.log",
     };
@@ -185,7 +184,6 @@ void emergencyLogBootstrap(int argc, char* argv[]) {
   }
 
   static constexpr const char* kEmergencyPaths[] = {
-      "/var/log/noctalia-greeter.log",
       "/var/lib/noctalia-greeter/greeter.log",
       "/tmp/noctalia-greeter.log",
   };
@@ -216,8 +214,7 @@ void initLogging() {
     std::fprintf(
         stderr,
         "[warn] [log] no log file opened; check permissions "
-        "on /var/lib/noctalia-greeter "
-        "and /var/log/noctalia-greeter.log\n"
+        "on /var/lib/noctalia-greeter/greeter.log\n"
     );
     std::fflush(stderr);
   }

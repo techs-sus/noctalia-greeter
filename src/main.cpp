@@ -138,11 +138,7 @@ int main(int argc, char* argv[]) {
       kLog.info("log-test ok; open files: {}", loggingPaths()[0] != '\0' ? loggingPaths() : "(none)");
       kLog.warn("log-test warn line");
       kLog.error("log-test error line");
-      std::printf(
-          "Check: /var/log/noctalia-greeter.log "
-          "/var/lib/noctalia-greeter/greeter.log "
-          "/tmp/noctalia-greeter.log\n"
-      );
+      std::printf("Check: /var/lib/noctalia-greeter/greeter.log (/tmp fallback)\n");
       return loggingPaths()[0] != '\0' ? 0 : 1;
     }
     if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
