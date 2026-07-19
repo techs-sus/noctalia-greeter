@@ -1442,11 +1442,17 @@ static struct greeter_keyboard* first_keyboard(struct greeter_server* server) {
 }
 
 static void update_seat_keyboard(struct greeter_server* server) {
+  if (server->shutting_down || server->seat == NULL) {
+    return;
+  }
   struct greeter_keyboard* keyboard = first_keyboard(server);
   wlr_seat_set_keyboard(server->seat, keyboard != NULL ? keyboard->wlr_keyboard : NULL);
 }
 
 static void recompute_keyboard_capability(struct greeter_server* server) {
+  if (server->shutting_down || server->seat == NULL) {
+    return;
+  }
   uint32_t caps = server->seat->capabilities;
   if (wl_list_empty(&server->keyboards)) {
     caps &= ~(uint32_t)WL_SEAT_CAPABILITY_KEYBOARD;
@@ -1457,6 +1463,9 @@ static void recompute_keyboard_capability(struct greeter_server* server) {
 }
 
 static void focus_mapped_views(struct greeter_server* server) {
+  if (server->shutting_down) {
+    return;
+  }
   struct greeter_output* output;
   wl_list_for_each(output, &server->outputs, link) {
     if (output->view != NULL && output->view->mapped) {
@@ -1499,13 +1508,20 @@ static void handle_keyboard_destroy(struct wl_listener* listener, void* data) {
   (void)data;
   struct greeter_keyboard* keyboard = wl_container_of(listener, keyboard, destroy);
   struct greeter_server* server = keyboard->server;
-  const bool was_seat_keyboard = wlr_seat_get_keyboard(server->seat) == keyboard->wlr_keyboard;
+  const bool was_seat_keyboard =
+      !server->shutting_down && server->seat != NULL && wlr_seat_get_keyboard(server->seat) == keyboard->wlr_keyboard;
 
   wl_list_remove(&keyboard->modifiers.link);
   wl_list_remove(&keyboard->key.link);
   wl_list_remove(&keyboard->destroy.link);
   wl_list_remove(&keyboard->link);
   free(keyboard);
+
+  // During wl_display_destroy the seat is already being torn down; updating
+  // capabilities here segfaults in wlr_seat_set_capabilities.
+  if (server->shutting_down) {
+    return;
+  }
 
   if (was_seat_keyboard) {
     update_seat_keyboard(server);
@@ -1596,6 +1612,9 @@ static void add_keyboard(struct greeter_server* server, struct wlr_input_device*
 
 static void handle_new_input(struct wl_listener* listener, void* data) {
   struct greeter_server* server = wl_container_of(listener, server, new_input);
+  if (server->shutting_down) {
+    return;
+  }
   struct wlr_input_device* device = data;
   uint32_t caps = server->seat->capabilities;
 
@@ -1628,7 +1647,7 @@ static void handle_new_input(struct wl_listener* listener, void* data) {
 static void handle_session_active(struct wl_listener* listener, void* data) {
   (void)data;
   struct greeter_server* server = wl_container_of(listener, server, session_active);
-  if (server->session == NULL || !server->session->active) {
+  if (server->shutting_down || server->session == NULL || !server->session->active) {
     return;
   }
 
