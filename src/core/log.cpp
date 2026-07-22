@@ -115,7 +115,7 @@ namespace {
 
     FILE* file = std::fopen(path, "a");
     if (file == nullptr) {
-      std::fprintf(stderr, "[warn] [log] cannot open '%s': %s\n", path, std::strerror(errno));
+      std::fprintf(stderr, "[WRN] [log] cannot open '%s': %s\n", path, std::strerror(errno));
       std::fflush(stderr);
       return false;
     }
@@ -158,11 +158,11 @@ namespace {
       return;
     }
     int priority = LOG_INFO;
-    if (level == "error") {
+    if (level == "ERR") {
       priority = LOG_ERR;
-    } else if (level == "warn") {
+    } else if (level == "WRN") {
       priority = LOG_WARNING;
-    } else if (level == "debug") {
+    } else if (level == "DBG") {
       priority = LOG_DEBUG;
     }
     syslog(
@@ -217,14 +217,14 @@ void initLogging() {
   if (g_fileLogging) {
     if (!g_logPaths.empty()) {
       if (g_consoleLogging) {
-        std::fprintf(stdout, "[info] [log] writing to: %s\n", g_logPaths.c_str());
+        std::fprintf(stdout, "[INF] [log] writing to: %s\n", g_logPaths.c_str());
         std::fflush(stdout);
       }
       if (g_syslogOpen) {
-        syslog(LOG_INFO, "[info] [log] writing to: %s", g_logPaths.c_str());
+        syslog(LOG_INFO, "[INF] [log] writing to: %s", g_logPaths.c_str());
       }
     } else if (g_consoleLogging) {
-      std::fprintf(stderr, "[warn] [log] NOCTALIA_GREETER_LOG is set but no log file could be opened\n");
+      std::fprintf(stderr, "[WRN] [log] NOCTALIA_GREETER_LOG is set but no log file could be opened\n");
       std::fflush(stderr);
     }
   }
@@ -255,7 +255,7 @@ static void writeLogLine(std::string_view tag, std::string_view level, std::stri
   const std::string line = oss.str();
 
   if (g_consoleLogging) {
-    FILE* stream = (level == "error" || level == "warn") ? stderr : stdout;
+    FILE* stream = (level == "ERR" || level == "WRN") ? stderr : stdout;
     std::fputs(line.c_str(), stream);
     std::fflush(stream);
   }

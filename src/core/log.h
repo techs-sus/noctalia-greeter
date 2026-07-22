@@ -21,19 +21,19 @@ public:
   explicit constexpr Logger(std::string_view tag) : m_tag(tag) {}
 
   template <typename... Args> void info(std::format_string<Args...> fmt, Args&&... args) const {
-    log("info", std::format(fmt, std::forward<Args>(args)...));
+    log("INF", std::format(fmt, std::forward<Args>(args)...));
   }
 
   template <typename... Args> void warn(std::format_string<Args...> fmt, Args&&... args) const {
-    log("warn", std::format(fmt, std::forward<Args>(args)...));
+    log("WRN", std::format(fmt, std::forward<Args>(args)...));
   }
 
   template <typename... Args> void error(std::format_string<Args...> fmt, Args&&... args) const {
-    log("error", std::format(fmt, std::forward<Args>(args)...));
+    log("ERR", std::format(fmt, std::forward<Args>(args)...));
   }
 
   template <typename... Args> void debug(std::format_string<Args...> fmt, Args&&... args) const {
-    log("debug", std::format(fmt, std::forward<Args>(args)...));
+    log("DBG", std::format(fmt, std::forward<Args>(args)...));
   }
 
 private:
